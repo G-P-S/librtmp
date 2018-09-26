@@ -339,7 +339,13 @@ RTMP_Free(RTMP *r)
 }
 
 void
-RTMP_Init(RTMP *r, const char* CAfile)
+RTMP_Init(RTMP *r)
+{
+    RTMP_Init_Secure(r, NULL);
+}
+
+void
+RTMP_Init_Secure(RTMP *r, const char* CAfile)
 {
 #ifdef CRYPTO
     if (!RTMP_TLS_ctx)
