@@ -21,6 +21,7 @@ elseif(${SYSTEM_NAME} MATCHES "linux-x86")
     add_definitions(-D_FILE_OFFSET_BITS=64)
 endif()
 
+add_definitions(-DCRYPTO=OPENSSL)
 set(${PROJ_UPPER}_LIBRARY_TYPE SHARED)
 
 set(${PROJ_UPPER}_INCLUDE_DIRS include)

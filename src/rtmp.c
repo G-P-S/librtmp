@@ -230,7 +230,7 @@ RTMP_LibVersion()
 }
 
 void
-RTMP_TLS_Init()
+RTMP_TLS_Init(const char* CAfile)
 {
 #ifdef CRYPTO
 #ifdef USE_POLARSSL
@@ -255,7 +255,15 @@ RTMP_TLS_Init()
     OpenSSL_add_all_digests();
     RTMP_TLS_ctx = SSL_CTX_new(SSLv23_method());
     SSL_CTX_set_options(RTMP_TLS_ctx, SSL_OP_ALL);
+  if(CAfile != NULL)
+  {
+    SSL_CTX_set_verify(RTMP_TLS_ctx, SSL_VERIFY_PEER, NULL);
+    SSL_CTX_load_verify_locations(RTMP_TLS_ctx, CAfile, NULL);
+  }
+  else
+  {
     SSL_CTX_set_default_verify_paths(RTMP_TLS_ctx);
+  }
 #endif
 #endif
 }
@@ -266,7 +274,7 @@ RTMP_TLS_AllocServerContext(const char* cert, const char* key)
     void *ctx = NULL;
 #ifdef CRYPTO
     if (!RTMP_TLS_ctx)
-        RTMP_TLS_Init();
+    RTMP_TLS_Init(NULL);
 #ifdef USE_POLARSSL
     tls_server_ctx *tc = ctx = calloc(1, sizeof(struct tls_server_ctx));
     tc->dhm_P = my_dhm_P;
@@ -333,9 +341,15 @@ RTMP_Free(RTMP *r)
 void
 RTMP_Init(RTMP *r)
 {
+    RTMP_Init_Secure(r, NULL);
+}
+
+void
+RTMP_Init_Secure(RTMP *r, const char* CAfile)
+{
 #ifdef CRYPTO
     if (!RTMP_TLS_ctx)
-        RTMP_TLS_Init();
+    RTMP_TLS_Init(CAfile);
 #endif
     
     memset(r, 0, sizeof(RTMP));
@@ -2973,7 +2987,7 @@ SAVC(_error);
 SAVC(close);
 SAVC(code);
 SAVC(level);
-//SAVC(description);
+SAVC(description);
 SAVC(onStatus);
 SAVC(playlist_ready);
 static const AVal av_NetStream_Failed = AVC("NetStream.Failed");
