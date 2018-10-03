@@ -81,6 +81,8 @@ TLS_CTX RTMP_TLS_ctx;
 
 static const int packetSize[] = { 12, 8, 4, 1 };
 
+static int gLastError = RTMP_ERROR_NONE;
+
 int RTMP_ctrlC;
 
 const char RTMPProtocolStrings[][7] = {
@@ -230,7 +232,7 @@ RTMP_LibVersion()
 }
 
 void
-RTMP_TLS_Init(const char* CAfile)
+RTMP_TLS_Init(const char* CAfile, int verifyDepth)
 {
 #ifdef CRYPTO
 #ifdef USE_POLARSSL
@@ -258,6 +260,10 @@ RTMP_TLS_Init(const char* CAfile)
   if(CAfile != NULL)
   {
     SSL_CTX_set_verify(RTMP_TLS_ctx, SSL_VERIFY_PEER, NULL);
+    if(verifyDepth > 0)
+    {
+        SSL_CTX_set_verify_depth(RTMP_TLS_ctx, verifyDepth);
+    }
     SSL_CTX_load_verify_locations(RTMP_TLS_ctx, CAfile, NULL);
   }
   else
@@ -274,7 +280,7 @@ RTMP_TLS_AllocServerContext(const char* cert, const char* key)
     void *ctx = NULL;
 #ifdef CRYPTO
     if (!RTMP_TLS_ctx)
-    RTMP_TLS_Init(NULL);
+    RTMP_TLS_Init(NULL, 0);
 #ifdef USE_POLARSSL
     tls_server_ctx *tc = ctx = calloc(1, sizeof(struct tls_server_ctx));
     tc->dhm_P = my_dhm_P;
@@ -341,15 +347,15 @@ RTMP_Free(RTMP *r)
 void
 RTMP_Init(RTMP *r)
 {
-    RTMP_Init_Secure(r, NULL);
+    RTMP_Init_Secure(r, NULL, 0);
 }
 
 void
-RTMP_Init_Secure(RTMP *r, const char* CAfile)
+RTMP_Init_Secure(RTMP *r, const char* CAfile, int verifyDepth)
 {
 #ifdef CRYPTO
     if (!RTMP_TLS_ctx)
-    RTMP_TLS_Init(CAfile);
+    RTMP_TLS_Init(CAfile, verifyDepth);
 #endif
     
     memset(r, 0, sizeof(RTMP));
@@ -1064,6 +1070,7 @@ RTMP_Connect1(RTMP *r, RTMPPacket *cp)
         {
             RTMP_Log(RTMP_LOGERROR, "%s, TLS_Connect failed", __FUNCTION__);
             RTMP_Close(r);
+            gLastError = RTMP_SSL_CONNECT_ERROR;
             return FALSE;
         }
 #else
@@ -1135,6 +1142,12 @@ RTMP_Connect(RTMP *r, RTMPPacket *cp)
     r->m_bSendCounter = TRUE;
     
     return RTMP_Connect1(r, cp);
+}
+
+int
+RTMP_Get_Last_Error()
+{
+    return gLastError;
 }
 
 static int

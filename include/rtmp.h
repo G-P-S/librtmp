@@ -222,6 +222,10 @@ extern "C"
 #define RTMP_READ_EOF	-1
 #define RTMP_READ_IGNORE	0
 
+#define RTMP_ERROR_NONE 0
+#define RTMP_SSL_CONNECT_ERROR -1
+
+
     /* if bResume == TRUE */
     uint8_t initialFrameType;
     uint32_t nResumeTS;
@@ -337,8 +341,9 @@ extern "C"
   int RTMP_ClientPacket(RTMP *r, RTMPPacket *packet);
 
   void RTMP_Init(RTMP *r);
-  void RTMP_Init_Secure(RTMP *r, const char* CAfile);
+  void RTMP_Init_Secure(RTMP *r, const char* CAfile, int verifyDepth);
   void RTMP_Close(RTMP *r);
+  int RTMP_Get_Last_Error();
   RTMP *RTMP_Alloc(void);
   void RTMP_Free(RTMP *r);
   void RTMP_EnableWrite(RTMP *r);
