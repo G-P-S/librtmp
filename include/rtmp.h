@@ -224,6 +224,7 @@ extern "C"
 
 #define RTMP_ERROR_NONE 0
 #define RTMP_SSL_CONNECT_ERROR -1
+#define RTMP_FAILED_TO_CONNECT -2
 
 
     /* if bResume == TRUE */

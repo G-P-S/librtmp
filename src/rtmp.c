@@ -982,7 +982,10 @@ RTMP_Connect0(RTMP *r, struct sockaddr * service)
             int err = GetSockError();
             RTMP_Log(RTMP_LOGERROR, "%s, failed to connect socket. %d (%s)",
                      __FUNCTION__, err, strerror(err));
+            printf("librtmp: %s, failed to connect socket. %d (%s)\n",
+                     __FUNCTION__, err, strerror(err));
             RTMP_Close(r);
+            gLastError = RTMP_FAILED_TO_CONNECT;
             return FALSE;
         }
         
@@ -1147,7 +1150,9 @@ RTMP_Connect(RTMP *r, RTMPPacket *cp)
 int
 RTMP_Get_Last_Error()
 {
-    return gLastError;
+    int returnerr = gLastError;
+    gLastError = RTMP_ERROR_NONE;
+    return returnerr;
 }
 
 static int
