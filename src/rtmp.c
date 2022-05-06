@@ -996,6 +996,7 @@ RTMP_Connect0(RTMP *r, struct sockaddr * service)
             {
                 RTMP_Log(RTMP_LOGERROR, "%s, SOCKS negotiation failed.", __FUNCTION__);
                 RTMP_Close(r);
+                gLastError = -101;
                 return FALSE;
             }
         }
@@ -1004,6 +1005,7 @@ RTMP_Connect0(RTMP *r, struct sockaddr * service)
     {
         RTMP_Log(RTMP_LOGERROR, "%s, failed to create socket. Error: %d", __FUNCTION__,
                  GetSockError());
+        gLastError = -102;
         return FALSE;
     }
     
@@ -1094,6 +1096,7 @@ RTMP_Connect1(RTMP *r, RTMPPacket *cp)
             r->m_msgCounter = 0;
             RTMP_Log(RTMP_LOGDEBUG, "%s, Could not connect for handshake", __FUNCTION__);
             RTMP_Close(r);
+            gLastError = -103;
             return 0;
         }
         r->m_msgCounter = 0;
@@ -1103,6 +1106,7 @@ RTMP_Connect1(RTMP *r, RTMPPacket *cp)
     {
         RTMP_Log(RTMP_LOGERROR, "%s, handshake failed.", __FUNCTION__);
         RTMP_Close(r);
+        gLastError = -104;
         return FALSE;
     }
     RTMP_Log(RTMP_LOGDEBUG, "%s, handshaked", __FUNCTION__);
@@ -1111,6 +1115,7 @@ RTMP_Connect1(RTMP *r, RTMPPacket *cp)
     {
         RTMP_Log(RTMP_LOGERROR, "%s, RTMP connect failed.", __FUNCTION__);
         RTMP_Close(r);
+        gLastError = -105;
         return FALSE;
     }
     return TRUE;
@@ -1121,7 +1126,10 @@ RTMP_Connect(RTMP *r, RTMPPacket *cp)
 {
     struct sockaddr_in service;
     if (!r->Link.hostname.av_len)
+    {
+        gLastError = -106;
         return FALSE;
+    }
     
     memset(&service, 0, sizeof(struct sockaddr_in));
     service.sin_family = AF_INET;
@@ -1130,17 +1138,29 @@ RTMP_Connect(RTMP *r, RTMPPacket *cp)
     {
         /* Connect via SOCKS */
         if (!add_addr_info(&service, &r->Link.sockshost, r->Link.socksport))
+        {
+            gLastError = RTMP_FAILED_TO_CONNECT;
             return FALSE;
+        }
     }
     else
     {
         /* Connect directly */
         if (!add_addr_info(&service, &r->Link.hostname, r->Link.port))
+        {
+            gLastError = RTMP_FAILED_TO_CONNECT;
             return FALSE;
+        }
     }
     
     if (!RTMP_Connect0(r, (struct sockaddr *)&service))
+    {
+        if(gLastError == 0)
+        {
+            gLastError = -107;
+        }
         return FALSE;
+    }
     
     r->m_bSendCounter = TRUE;
     
@@ -3689,6 +3709,7 @@ RTMP_ReadPacket(RTMP *r, RTMPPacket *packet)
     if (ReadN(r, (char *)hbuf, 1) == 0)
     {
         RTMP_Log(RTMP_LOGERROR, "%s, failed to read RTMP packet header", __FUNCTION__);
+        gLastError = RTMP_FAILED_SERVER;
         return FALSE;
     }
     
@@ -3701,6 +3722,7 @@ RTMP_ReadPacket(RTMP *r, RTMPPacket *packet)
         {
             RTMP_Log(RTMP_LOGERROR, "%s, failed to read RTMP packet header 2nd byte",
                      __FUNCTION__);
+            gLastError = -109;
             return FALSE;
         }
         packet->m_nChannel = hbuf[1];
@@ -3714,6 +3736,7 @@ RTMP_ReadPacket(RTMP *r, RTMPPacket *packet)
         {
             RTMP_Log(RTMP_LOGERROR, "%s, failed to read RTMP packet header 3nd byte",
                      __FUNCTION__);
+            gLastError = -110;
             return FALSE;
         }
         tmp = (hbuf[2] << 8) + hbuf[1];
@@ -3737,6 +3760,7 @@ RTMP_ReadPacket(RTMP *r, RTMPPacket *packet)
         r->m_vecChannelsIn = packets;
         if (!timestamp || !packets) {
             r->m_channelsAllocatedIn = 0;
+            gLastError = -111;
             return FALSE;
         }
         memset(r->m_channelTimestamp + r->m_channelsAllocatedIn, 0, sizeof(int) * (n - r->m_channelsAllocatedIn));
@@ -3760,6 +3784,7 @@ RTMP_ReadPacket(RTMP *r, RTMPPacket *packet)
     {
         RTMP_Log(RTMP_LOGERROR, "%s, failed to read RTMP packet header. type: %x",
                  __FUNCTION__, (unsigned int)hbuf[0]);
+        gLastError = -112;
         return FALSE;
     }
     
@@ -3791,6 +3816,7 @@ RTMP_ReadPacket(RTMP *r, RTMPPacket *packet)
             {
                 RTMP_Log(RTMP_LOGERROR, "%s, failed to read extended timestamp",
                          __FUNCTION__);
+                gLastError = -113;
                 return FALSE;
             }
             packet->m_nTimeStamp = AMF_DecodeInt32(header + nSize);
@@ -3805,6 +3831,7 @@ RTMP_ReadPacket(RTMP *r, RTMPPacket *packet)
         if (!RTMPPacket_Alloc(packet, packet->m_nBodySize))
         {
             RTMP_Log(RTMP_LOGDEBUG, "%s, failed to allocate packet", __FUNCTION__);
+            gLastError = -114;
             return FALSE;
         }
         //didAlloc = TRUE;
@@ -3829,6 +3856,7 @@ RTMP_ReadPacket(RTMP *r, RTMPPacket *packet)
     {
         RTMP_Log(RTMP_LOGERROR, "%s, failed to read RTMP packet body. len: %u",
                  __FUNCTION__, packet->m_nBodySize);
+        gLastError = -115;
         return FALSE;
     }
     
