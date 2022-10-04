@@ -30,7 +30,7 @@
 #include <time.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
-
+#include <errno.h>
 #include "rtmp_sys.h"
 #include "log.h"
 
@@ -1597,6 +1597,8 @@ WriteN(RTMP *r, const char *buffer, int n)
 #ifdef CRYPTO
     char *encrypted = 0;
     char buf[RTMP_BUFFER_CACHE_SIZE];
+
+    int retryBusy = 0;
     
     if (r->Link.rc4keyOut)
     {
@@ -1634,6 +1636,14 @@ WriteN(RTMP *r, const char *buffer, int n)
             
             if (sockerr == EINTR && !RTMP_ctrlC)
             {
+                continue;
+            }
+
+            if(sockerr == EAGAIN && retryBusy<5)
+            {
+                printf("fail retry, sleeping\n");
+                usleep(100000);
+                retryBusy++;
                 continue;
             }
             
