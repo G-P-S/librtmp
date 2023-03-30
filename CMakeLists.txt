@@ -24,7 +24,14 @@ endif()
 add_definitions(-DCRYPTO=OPENSSL)
 set(${PROJ_UPPER}_LIBRARY_TYPE SHARED)
 
-set(${PROJ_UPPER}_INCLUDE_DIRS include)
+if(${SYSTEM_NAME} MATCHES "linux-arm-")
+    set(${PROJ_UPPER}_INCLUDE_DIRS 
+    ../openssl/include
+    include
+    )
+else()
+    set(${PROJ_UPPER}_INCLUDE_DIRS include)
+endif()
 
 set(${PROJ_UPPER}_PUBLIC_HEADERS include/amf.h include/rtmp.h)
 
