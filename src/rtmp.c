@@ -64,8 +64,9 @@ static const char *my_dhm_G = "4";
 #include <openssl/md5.h>
 #include <openssl/bio.h>
 #include <openssl/buffer.h>
+#include <openssl/x509v3.h>
 #endif
-TLS_CTX RTMP_TLS_ctx;
+TLS_CTX RTMP_TLS_ctx = NULL;
 #endif
 
 #define RTMP_SIG_SIZE 1536
@@ -231,6 +232,127 @@ RTMP_LibVersion()
     return RTMP_LIB_VERSION;
 }
 
+/*
+void print_cn_name(const char* label, X509_NAME* const name)
+{
+	int idx = -1, success = 0;
+	unsigned char *utf8 = NULL;
+
+	do
+	{
+		if (!name) break; // failed
+
+		idx = X509_NAME_get_index_by_NID(name, NID_commonName, -1);
+		if (!(idx > -1))  break; // failed
+
+		X509_NAME_ENTRY* entry = X509_NAME_get_entry(name, idx);
+		if (!entry) break; // failed
+
+		ASN1_STRING* data = X509_NAME_ENTRY_get_data(entry);
+		if (!data) break; // failed
+
+		int length = ASN1_STRING_to_UTF8(&utf8, data);
+		if (!utf8 || !(length > 0))  break; // failed
+
+		fprintf(stdout, "  %s: %s\n", label, utf8);
+		success = 1;
+
+	} while (0);
+
+	if (utf8)
+		OPENSSL_free(utf8);
+
+	if (!success)
+		fprintf(stdout, "  %s: <not available>\n", label);
+}
+
+void print_san_name(const char* label, X509* const cert)
+{
+    int success = 0;
+    GENERAL_NAMES* names = NULL;
+    unsigned char* utf8 = NULL;
+
+    do
+    {
+        if(!cert) break; // failed
+
+        names = X509_get_ext_d2i(cert, NID_subject_alt_name, 0, 0 );
+        if(!names) break;
+
+        int i = 0, count = sk_GENERAL_NAME_num(names);
+        if(!count) break; // failed
+
+        for( i = 0; i < count; ++i )
+        {
+            GENERAL_NAME* entry = sk_GENERAL_NAME_value(names, i);
+            if(!entry) continue;
+
+            if(GEN_DNS == entry->type)
+            {
+                int len1 = 0, len2 = -1;
+
+                len1 = ASN1_STRING_to_UTF8(&utf8, entry->d.dNSName);
+                if(utf8) {
+                    len2 = (int)strlen((const char*)utf8);
+                }
+
+                if(len1 != len2) {
+                    fprintf(stderr, "  Strlen and ASN1_STRING size do not match (embedded null?): %d vs %d\n", len2, len1);
+                }
+
+                // If there's a problem with string lengths, then
+                // we skip the candidate and move on to the next.
+                // Another policy would be to fails since it probably
+                // indicates the client is under attack.
+                if(utf8 && len1 && len2 && (len1 == len2)) {
+                    fprintf(stdout, "  %s: %s\n", label, utf8);
+                    success = 1;
+                }
+
+                if(utf8) {
+                    OPENSSL_free(utf8), utf8 = NULL;
+                }
+            }
+            else
+            {
+                fprintf(stderr, "  Unknown GENERAL_NAME type: %d\n", entry->type);
+            }
+        }
+
+    } while (0);
+
+    if(names)
+        GENERAL_NAMES_free(names);
+
+    if(utf8)
+        OPENSSL_free(utf8);
+
+    if(!success)
+        fprintf(stdout, "  %s: <not available>\n", label);
+
+}
+
+int verify_callback(int preverify, X509_STORE_CTX* x509_ctx)
+{
+    int depth = X509_STORE_CTX_get_error_depth(x509_ctx);
+    int err = X509_STORE_CTX_get_error(x509_ctx);
+    
+    X509* cert = X509_STORE_CTX_get_current_cert(x509_ctx);
+    X509_NAME* iname = cert ? X509_get_issuer_name(cert) : NULL;
+    X509_NAME* sname = cert ? X509_get_subject_name(cert) : NULL;
+    
+    print_cn_name("Issuer (cn)", iname);
+    print_cn_name("Subject (cn)", sname);
+    
+    if(depth == 0) {
+        // If depth is 0, its the server's certificate. Print the SANs too
+        print_san_name("Subject (san)", cert);
+    }
+
+    return preverify;
+}
+*/
+
 void
 RTMP_TLS_Init(const char* CAfile, int verifyDepth)
 {
@@ -253,23 +375,24 @@ RTMP_TLS_Init(const char* CAfile, int verifyDepth)
 #elif !defined(NO_SSL) /* USE_OPENSSL */
     /* libcrypto doesn't need anything special */
     SSL_load_error_strings();
+    ERR_load_ERR_strings();
     OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS, NULL);
     OpenSSL_add_all_digests();
-    RTMP_TLS_ctx = SSL_CTX_new(SSLv23_method());
+    RTMP_TLS_ctx = SSL_CTX_new(TLS_method());
     SSL_CTX_set_options(RTMP_TLS_ctx, SSL_OP_ALL);
-  if(CAfile != NULL)
-  {
-    SSL_CTX_set_verify(RTMP_TLS_ctx, SSL_VERIFY_PEER, NULL);
-    if(verifyDepth > 0)
+    if(CAfile != NULL)
     {
-        SSL_CTX_set_verify_depth(RTMP_TLS_ctx, verifyDepth);
+        SSL_CTX_set_verify(RTMP_TLS_ctx, SSL_VERIFY_PEER, NULL);
+        if(verifyDepth > 0)
+        {
+            SSL_CTX_set_verify_depth(RTMP_TLS_ctx, verifyDepth);
+        }
+        SSL_CTX_load_verify_locations(RTMP_TLS_ctx, CAfile, NULL);
     }
-    SSL_CTX_load_verify_locations(RTMP_TLS_ctx, CAfile, NULL);
-  }
-  else
-  {
-    SSL_CTX_set_default_verify_paths(RTMP_TLS_ctx);
-  }
+    else
+    {
+        SSL_CTX_set_default_verify_paths(RTMP_TLS_ctx);
+    }
 #endif
 #endif
 }
@@ -1069,11 +1192,14 @@ RTMP_Connect1(RTMP *r, RTMPPacket *cp)
     if (r->Link.protocol & RTMP_FEATURE_SSL)
     {
 #if defined(CRYPTO) && !defined(NO_SSL)
+        int sslerr = 0;
         TLS_client(RTMP_TLS_ctx, r->m_sb.sb_ssl);
         TLS_setfd(r->m_sb.sb_ssl, r->m_sb.sb_socket);
-        if (TLS_connect(r->m_sb.sb_ssl) < 0)
+        long rt;
+        rt = SSL_set_tlsext_host_name(r->m_sb.sb_ssl, r->Link.hostname.av_val);
+        if ((sslerr = TLS_connect(r->m_sb.sb_ssl)) < 0)
         {
-            RTMP_Log(RTMP_LOGERROR, "%s, TLS_Connect failed", __FUNCTION__);
+            RTMP_Log(RTMP_LOGERROR, "%s, TLS_Connect failed %d, %ld", __FUNCTION__, sslerr, rt);
             RTMP_Close(r);
             gLastError = RTMP_SSL_CONNECT_ERROR;
             return FALSE;
