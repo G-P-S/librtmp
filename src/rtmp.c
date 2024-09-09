@@ -1087,7 +1087,7 @@ RTMP_Connect0(RTMP *r, struct sockaddr * service)
             {
                 RTMP_Log(RTMP_LOGERROR, "%s, Setting socket receive timeout to %ds failed!",
                         __FUNCTION__, r->Link.timeout);
-                printf("%s, Setting socket receive timeout to %ds failed!",
+                printf("librtmp: %s, Setting socket receive timeout to %ds failed!\n",
                         __FUNCTION__, r->Link.timeout);
             }
             if (setsockopt
@@ -1095,9 +1095,32 @@ RTMP_Connect0(RTMP *r, struct sockaddr * service)
             {
                 RTMP_Log(RTMP_LOGERROR, "%s, Setting socket send timeout to %ds failed!",
                         __FUNCTION__, r->Link.timeout);
-                printf("%s, Setting socket send timeout to %ds failed!",
+                printf("librtmp: %s, Setting socket send timeout to %ds failed!\n",
                         __FUNCTION__, r->Link.timeout);
             }
+            int ttl = 64;
+            socklen_t ttllen = 0;
+            if(getsockopt(r->m_sb.sb_socket, IPPROTO_IP, IP_TTL, &ttl, &ttllen) == 0)
+            {
+                if(ttllen == 0)
+                    ttl = 65;
+                else
+                    ttl+=1;
+                if(setsockopt(r->m_sb.sb_socket, IPPROTO_IP, IP_TTL, (void *)&ttl, sizeof(ttl))<0)
+                {
+                    int err = errno;
+                    printf("librtmp: set TTL failed %d %s\n", err, strerror(err));
+                }
+            }
+            else
+            {
+                if(setsockopt(r->m_sb.sb_socket, IPPROTO_IP, IP_TTL, (void *)&ttl, sizeof(ttl))<0)
+                {
+                    int err = errno;
+                    printf("librtmp: set TTL failed %d %s\n", err, strerror(err));
+                }
+            }
+            fflush(stdout);
         }
 
         if (connect(r->m_sb.sb_socket, service, sizeof(struct sockaddr)) < 0)
@@ -1772,16 +1795,12 @@ WriteN(RTMP *r, const char *buffer, int n)
         {
             nBytes = RTMPSockBuf_Send(&r->m_sb, ptr, n);
         }
-        /*RTMP_Log(RTMP_LOGDEBUG, "%s: %d\n", __FUNCTION__, nBytes); */
         
         if (nBytes < 0)
         {
             int sockerr = GetSockError();
-            RTMP_Log(RTMP_LOGERROR, "%s, RTMP send error %d (%d bytes)", __FUNCTION__,
-                     sockerr, n);
-            printf("%s, RTMP send error %d (%d bytes)\n", __FUNCTION__, sockerr, n);
-            //printDebugMessage(1, "%s, RTMP send error %d (%d bytes)", __FUNCTION__,
-            //                  sockerr, n);
+            RTMP_Log(RTMP_LOGERROR, "%s, RTMP send error %d (%d bytes)", __FUNCTION__, sockerr, n);
+            printf("librtmp: %s, RTMP send error %d (%d bytes)\n", __FUNCTION__, sockerr, n);
             
             if (sockerr == EINTR && !RTMP_ctrlC)
             {
