@@ -379,6 +379,7 @@ RTMP_TLS_Init(const char* CAfile, int verifyDepth)
     OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS, NULL);
     OpenSSL_add_all_digests();
     RTMP_TLS_ctx = SSL_CTX_new(TLS_method());
+    SSL_CTX_set_min_proto_version(RTMP_TLS_ctx, TLS1_2_VERSION);
     SSL_CTX_set_options(RTMP_TLS_ctx, SSL_OP_ALL);
     if(CAfile != NULL)
     {
